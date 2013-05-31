@@ -1,0 +1,2 @@
+defmodule Raft do
+end
