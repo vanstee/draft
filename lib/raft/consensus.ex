@@ -1,7 +1,10 @@
 defmodule Raft.Consensus do
   use GenFsm.Behaviour
 
-  @timeout 100
+  @heartbeat_timeout 75
+  @election_timeout_minimum 150
+  @election_timeout_maximum @election_timeout_minimum * 2
+  @election_timeout :crypto.rand_uniform(@election_timeout_minimum, @election_timeout_maximum)
 
   def heartbeat(node) do
     :gen_fsm.send_event(node, :heartbeat)
