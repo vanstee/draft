@@ -1,5 +1,5 @@
 defmodule Draft.Consensus do
-  use GenFsm.Behaviour, async: true
+  use GenFsm.Behaviour
 
   @heartbeat_timeout 75
   @election_timeout_minimum 150

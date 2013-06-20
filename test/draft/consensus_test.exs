@@ -1,5 +1,5 @@
 defmodule Draft.ConsensusTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   import TestHelper
 
