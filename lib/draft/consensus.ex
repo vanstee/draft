@@ -22,43 +22,38 @@ defmodule Draft.Consensus do
     { :ok, :follower, state }
   end
 
-  def follower(request_vote = RequestVote[term: term], state = State[current_term: current_term])
-      when term < current_term do
-    send_event(request_vote.candidate_id, RequestVoteResult.new(term: current_term, vote_granted: false))
+  def follower(RequestVote[term: term, candidate_id: candidate_id], state = State[current_term: current_term, voted_for: voted_for])
+      when term < current_term
+      when term == current_term and voted_for != nil and voted_for != candidate_id do
+    send_event(candidate_id, RequestVoteResult.new(term: current_term, vote_granted: false))
     { :next_state, :follower, state }
   end
 
-  def follower(request_vote = RequestVote[], state = State[]) do
-    if request_vote.term > state.current_term do
-      state = state.update(current_term: request_vote.term, voted_for: nil)
-    end
-
-    # TODO: Also compare the candidate's log against your own
-    if state.voted_for == nil or state.voted_for == request_vote.candidate_id do
-      state = state.update(voted_for: request_vote.candidate_id)
-      # TODO: Reset election timeout
-      send_event(request_vote.candidate_id, RequestVoteResult.new(term: state.current_term, vote_granted: true))
-    else
-      send_event(request_vote.candidate_id, RequestVoteResult.new(term: state.current_term, vote_granted: false))
-    end
+  # TODO: Compare the candidate's log against your own
+  # TODO: Reset election timeout
+  def follower(RequestVote[term: term, candidate_id: candidate_id], state = State[current_term: current_term]) do
+    state = state.update(current_term: Enum.max([term, current_term]), voted_for: candidate_id)
+    send_event(candidate_id, RequestVoteResult.new(term: state.current_term, vote_granted: true))
     { :next_state, :follower, state }
   end
 
-  def candidate(request_vote = RequestVote[], state = State[]) do
-    if request_vote.term > state.current_term do
-      follower(request_vote, state)
-    else
-      send_event(request_vote.candidate_id, RequestVoteResult.new(term: state.current_term, vote_granted: false))
-      { :next_state, :candidate, state }
-    end
+  def candidate(request_vote = RequestVote[term: term], state = State[current_term: current_term])
+      when term > current_term do
+    follower(request_vote, state)
   end
 
-  def leader(request_vote = RequestVote[], state = State[]) do
-    if request_vote.term > state.current_term do
-      follower(request_vote, state)
-    else
-      send_event(request_vote.candidate_id, RequestVoteResult.new(term: state.current_term, vote_granted: false))
-      { :next_state, :leader, state }
-    end
+  def candidate(RequestVote[candidate_id: candidate_id], state = State[current_term: current_term]) do
+    send_event(candidate_id, RequestVoteResult.new(term: current_term, vote_granted: false))
+    { :next_state, :candidate, state }
+  end
+
+  def leader(request_vote = RequestVote[term: term], state = State[current_term: current_term])
+      when term > current_term do
+    follower(request_vote, state)
+  end
+
+  def leader(RequestVote[candidate_id: candidate_id], state = State[current_term: current_term]) do
+    send_event(candidate_id, RequestVoteResult.new(term: current_term, vote_granted: false))
+    { :next_state, :leader, state }
   end
 end
