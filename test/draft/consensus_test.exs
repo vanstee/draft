@@ -1,9 +1,9 @@
-defmodule Raft.ConsensusTest do
+defmodule Draft.ConsensusTest do
   use ExUnit.Case
 
   import TestHelper
 
-  alias Raft.Consensus
+  alias Draft.Consensus
 
   test 'sending an event to another node' do
     Consensus.send_event(self, :event)

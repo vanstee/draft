@@ -1,4 +1,4 @@
-defmodule Raft.Consensus do
+defmodule Draft.Consensus do
   use GenFsm.Behaviour, async: true
 
   @heartbeat_timeout 75
