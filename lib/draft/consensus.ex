@@ -9,6 +9,8 @@ defmodule Draft.Consensus do
   defrecord State, current_term: 0, voted_for: nil, log: []
   defrecord RequestVote, term: nil, candidate_id: nil, last_log_index: nil, last_log_term: nil
   defrecord RequestVoteResult, term: nil, vote_granted: nil
+  defrecord AppendEntries, term: nil, leader_id: nil, prev_log_index: nil, prev_log_term: nil, entries: [], commit_index: nil
+  defrecord AppendEntriesResult, term: nil, success: nil
 
   def send_event(node, message) do
     :gen_fsm.send_event(node, message)
