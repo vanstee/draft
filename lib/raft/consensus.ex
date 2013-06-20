@@ -7,9 +7,12 @@ defmodule Raft.Consensus do
   @election_timeout :crypto.rand_uniform(@election_timeout_minimum, @election_timeout_maximum)
 
   defrecord State, current_term: 0, voted_for: nil, log: []
-
   defrecord RequestVote, term: nil, candidate_id: nil, last_log_index: nil, last_log_term: nil
   defrecord RequestVoteResult, term: nil, vote_granted: nil
+
+  def send_event(node, message) do
+    :gen_fsm.send_event(node, message)
+  end
 
   def start_link(state // State.new) do
     :gen_fsm.start_link(__MODULE__, state, [])
@@ -19,9 +22,9 @@ defmodule Raft.Consensus do
     { :ok, :follower, state }
   end
 
-  def follower(RequestVote[term: term], state = State[current_term: current_term])
+  def follower(request_vote = RequestVote[term: term], state = State[current_term: current_term])
       when term < current_term do
-    # reply RequestVoteResult.new(term: current_term, vote_granted: false)
+    send_event(request_vote.candidate_id, RequestVoteResult.new(term: current_term, vote_granted: false))
     { :next_state, :follower, state }
   end
 
@@ -34,9 +37,10 @@ defmodule Raft.Consensus do
     if state.voted_for == nil or state.voted_for == request_vote.candidate_id do
       state = state.update(voted_for: request_vote.candidate_id)
       # TODO: Reset election timeout
+      send_event(request_vote.candidate_id, RequestVoteResult.new(term: state.current_term, vote_granted: true))
+    else
+      send_event(request_vote.candidate_id, RequestVoteResult.new(term: state.current_term, vote_granted: false))
     end
-
-    # reply RequestVoteResult.new(term: state.current_term, vote_granted: true)
     { :next_state, :follower, state }
   end
 
@@ -44,7 +48,7 @@ defmodule Raft.Consensus do
     if request_vote.term > state.current_term do
       follower(request_vote, state)
     else
-      # reply RequestVoteResult.new(term: state.current_term, vote_granted: false)
+      send_event(request_vote.candidate_id, RequestVoteResult.new(term: state.current_term, vote_granted: false))
       { :next_state, :candidate, state }
     end
   end
@@ -53,7 +57,7 @@ defmodule Raft.Consensus do
     if request_vote.term > state.current_term do
       follower(request_vote, state)
     else
-      # reply RequestVoteResult.new(term: state.current_term, vote_granted: false)
+      send_event(request_vote.candidate_id, RequestVoteResult.new(term: state.current_term, vote_granted: false))
       { :next_state, :leader, state }
     end
   end

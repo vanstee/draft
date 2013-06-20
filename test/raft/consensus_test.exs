@@ -1,70 +1,74 @@
 defmodule Raft.ConsensusTest do
   use ExUnit.Case
 
-  import Raft.Consensus
+  import TestHelper
 
-  Record.import Raft.Consensus.State, as: :state
-  Record.import Raft.Consensus.RequestVote, as: :request_vote
+  alias Raft.Consensus
+
+  test 'sending an event to another node' do
+    Consensus.send_event(self, :event)
+    assert_receive_event(:event)
+  end
 
   test 'follower receiving "request_vote" with stale term' do
-    candidate_id = make_ref
-    result = follower(request_vote(term: 1, candidate_id: candidate_id), state(current_term: 2))
-    assert result == { :next_state, :follower, state(current_term: 2) }
+    result = Consensus.follower(Consensus.RequestVote.new(term: 1, candidate_id: self), Consensus.State.new(current_term: 2))
+    assert result == { :next_state, :follower, Consensus.State.new(current_term: 2) }
+    assert_receive_event(Consensus.RequestVoteResult.new(term: 2, vote_granted: false))
   end
 
   test 'follower receiving "request_vote" with current term when a vote has already been cast' do
     voted_for = make_ref
-    candidate_id = make_ref
-    result = follower(request_vote(term: 1, candidate_id: candidate_id), state(current_term: 1, voted_for: voted_for))
-    assert result == { :next_state, :follower, state(voted_for: voted_for, current_term: 1) }
+    result = Consensus.follower(Consensus.RequestVote.new(term: 1, candidate_id: self), Consensus.State.new(current_term: 1, voted_for: voted_for))
+    assert result == { :next_state, :follower, Consensus.State.new(voted_for: voted_for, current_term: 1) }
+    assert_receive_event(Consensus.RequestVoteResult.new(term: 1, vote_granted: false))
   end
 
   test 'follower receiving "request_vote" with current term when no vote has been cast' do
-    candidate_id = make_ref
-    result = follower(request_vote(term: 1, candidate_id: candidate_id), state(current_term: 1))
-    assert result == { :next_state, :follower, state(current_term: 1, voted_for: candidate_id) }
+    result = Consensus.follower(Consensus.RequestVote.new(term: 1, candidate_id: self), Consensus.State.new(current_term: 1))
+    assert result == { :next_state, :follower, Consensus.State.new(current_term: 1, voted_for: self) }
+    assert_receive_event(Consensus.RequestVoteResult.new(term: 1, vote_granted: true))
   end
 
   test 'follower receiving "request_vote" with higher term' do
     voted_for = make_ref
-    candidate_id = make_ref
-    result = follower(request_vote(term: 2, candidate_id: candidate_id), state(current_term: 1, voted_for: voted_for))
-    assert result == { :next_state, :follower, state(voted_for: candidate_id, current_term: 2) }
+    result = Consensus.follower(Consensus.RequestVote.new(term: 2, candidate_id: self), Consensus.State.new(current_term: 1, voted_for: voted_for))
+    assert result == { :next_state, :follower, Consensus.State.new(voted_for: self, current_term: 2) }
+    assert_receive_event(Consensus.RequestVoteResult.new(term: 2, vote_granted: true))
   end
 
   test 'candidate receiving "request_vote" with stale term' do
-    candidate_id = make_ref
-    result = candidate(request_vote(term: 1, candidate_id: candidate_id), state(current_term: 2))
-    assert result == { :next_state, :candidate, state(current_term: 2) }
+    result = Consensus.candidate(Consensus.RequestVote.new(term: 1, candidate_id: self), Consensus.State.new(current_term: 2))
+    assert result == { :next_state, :candidate, Consensus.State.new(current_term: 2) }
+    assert_receive_event(Consensus.RequestVoteResult.new(term: 2, vote_granted: false))
   end
 
   test 'candidate receiving "request_vote" with current term' do
-    candidate_id = make_ref
-    result = candidate(request_vote(term: 1, candidate_id: candidate_id), state(current_term: 1))
-    assert result == { :next_state, :candidate, state(current_term: 1) }
+    result = Consensus.candidate(Consensus.RequestVote.new(term: 1, candidate_id: self), Consensus.State.new(current_term: 1))
+    assert result == { :next_state, :candidate, Consensus.State.new(current_term: 1) }
+    assert_receive_event(Consensus.RequestVoteResult.new(term: 1, vote_granted: false))
   end
 
   test 'candidate receiving "request_vote" with higher term' do
-    candidate_id = make_ref
-    result = candidate(request_vote(term: 2, candidate_id: candidate_id), state(current_term: 1))
-    assert result == { :next_state, :follower, state(current_term: 2, voted_for: candidate_id) }
+    result = Consensus.candidate(Consensus.RequestVote.new(term: 2, candidate_id: self), Consensus.State.new(current_term: 1))
+    assert result == { :next_state, :follower, Consensus.State.new(current_term: 2, voted_for: self) }
+    assert_receive_event(Consensus.RequestVoteResult.new(term: 2, vote_granted: true))
   end
 
   test 'leader receiving "request_vote" with stale term' do
-    candidate_id = make_ref
-    result = leader(request_vote(term: 1, candidate_id: candidate_id), state(current_term: 2))
-    assert result == { :next_state, :leader, state(current_term: 2) }
+    result = Consensus.leader(Consensus.RequestVote.new(term: 1, candidate_id: self), Consensus.State.new(current_term: 2))
+    assert result == { :next_state, :leader, Consensus.State.new(current_term: 2) }
+    assert_receive_event(Consensus.RequestVoteResult.new(term: 2, vote_granted: false))
   end
 
   test 'leader receiving "request_vote" with current term' do
-    candidate_id = make_ref
-    result = leader(request_vote(term: 1, candidate_id: candidate_id), state(current_term: 1))
-    assert result == { :next_state, :leader, state(current_term: 1) }
+    result = Consensus.leader(Consensus.RequestVote.new(term: 1, candidate_id: self), Consensus.State.new(current_term: 1))
+    assert result == { :next_state, :leader, Consensus.State.new(current_term: 1) }
+    assert_receive_event(Consensus.RequestVoteResult.new(term: 1, vote_granted: false))
   end
 
   test 'leader receiving "request_vote" with higher term' do
-    candidate_id = make_ref
-    result = leader(request_vote(term: 2, candidate_id: candidate_id), state(current_term: 1))
-    assert result == { :next_state, :follower, state(current_term: 2, voted_for: candidate_id) }
+    result = Consensus.leader(Consensus.RequestVote.new(term: 2, candidate_id: self), Consensus.State.new(current_term: 1))
+    assert result == { :next_state, :follower, Consensus.State.new(current_term: 2, voted_for: self) }
+    assert_receive_event(Consensus.RequestVoteResult.new(term: 2, vote_granted: true))
   end
 end
