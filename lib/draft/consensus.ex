@@ -26,7 +26,7 @@ defmodule Draft.Consensus do
       when term < current_term
       when term == current_term and voted_for != nil and voted_for != candidate_id do
     send_event(candidate_id, RequestVoteResult.new(term: current_term, vote_granted: false))
-    { :next_state, :follower, state }
+    next_state(:follower, state)
   end
 
   # TODO: Compare the candidate's log against your own
@@ -34,7 +34,7 @@ defmodule Draft.Consensus do
   def follower(RequestVote[term: term, candidate_id: candidate_id], state = State[current_term: current_term]) do
     state = state.update(current_term: Enum.max([term, current_term]), voted_for: candidate_id)
     send_event(candidate_id, RequestVoteResult.new(term: state.current_term, vote_granted: true))
-    { :next_state, :follower, state }
+    next_state(:follower, state)
   end
 
   def candidate(request_vote = RequestVote[term: term], state = State[current_term: current_term])
@@ -44,7 +44,7 @@ defmodule Draft.Consensus do
 
   def candidate(RequestVote[candidate_id: candidate_id], state = State[current_term: current_term]) do
     send_event(candidate_id, RequestVoteResult.new(term: current_term, vote_granted: false))
-    { :next_state, :candidate, state }
+    next_state(:candidate, state)
   end
 
   def leader(request_vote = RequestVote[term: term], state = State[current_term: current_term])
@@ -54,6 +54,10 @@ defmodule Draft.Consensus do
 
   def leader(RequestVote[candidate_id: candidate_id], state = State[current_term: current_term]) do
     send_event(candidate_id, RequestVoteResult.new(term: current_term, vote_granted: false))
-    { :next_state, :leader, state }
+    next_state(:leader, state)
+  end
+
+  defp next_state(state_name, state) do
+    { :next_state, state_name, state }
   end
 end
