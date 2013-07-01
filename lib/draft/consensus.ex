@@ -114,7 +114,7 @@ defmodule Draft.Consensus do
 
   defp vote_available?(request_vote, state) do
     current_term?(request_vote.term, state.current_term) and
-      (state.voted_for == nil or state.voted_for == request_vote.candidate_id)
+      state.voted_for in [nil, request_vote.candidate_id]
   end
 
   defp accept_entries?(append_entries, state) do
