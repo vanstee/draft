@@ -36,6 +36,30 @@ defmodule Draft.ConsensusTest do
     assert_receive_event(Consensus.RequestVoteResult.new(term: 2, vote_granted: true))
   end
 
+  test 'follower receiving "append_entries" with stale term' do
+    result = Consensus.follower(Consensus.AppendEntries.new(term: 1, leader_id: self), Consensus.State.new(current_term: 2, log: []))
+    assert result == { :next_state, :follower, Consensus.State.new(current_term: 2, log: []) }
+    assert_receive_event(Consensus.AppendEntriesResult.new(term: 2, success: false))
+  end
+
+  test 'follower receiving "append_entries" with the current or higher term and a log that does not contain the previous entry' do
+    result = Consensus.follower(Consensus.AppendEntries.new(term: 1, leader_id: self, prev_log_index: 1, prev_log_term: 2), Consensus.State.new(current_term: 1, log: []))
+    assert result == { :next_state, :follower, Consensus.State.new(current_term: 1, log: []) }
+    assert_receive_event(Consensus.AppendEntriesResult.new(term: 1, success: false))
+  end
+
+  test 'follower receiving "append_entries" with the current or higher term and a log that contains the previous entry' do
+    result = Consensus.follower(Consensus.AppendEntries.new(term: 1, leader_id: self, prev_log_index: 1, prev_log_term: 2, entries: [{ 2, 3, 'appended entry' }]), Consensus.State.new(current_term: 1, log: [{ 1, 2, 'previous entry' }]))
+    assert result == { :next_state, :follower, Consensus.State.new(current_term: 1, log: [{ 1, 2, 'previous entry' }, { 2, 3, 'appended entry' }]) }
+    assert_receive_event(Consensus.AppendEntriesResult.new(term: 1, success: true))
+  end
+
+  test 'follower receiving "append_entries" with higher term' do
+    result = Consensus.follower(Consensus.AppendEntries.new(term: 2, leader_id: self, prev_log_index: 1, prev_log_term: 2, entries: [{ 2, 3, 'appended entry' }]), Consensus.State.new(current_term: 1, log: [{ 1, 2, 'previous entry' }]))
+    assert result == { :next_state, :follower, Consensus.State.new(current_term: 2, log: [{ 1, 2, 'previous entry' }, { 2, 3, 'appended entry' }]) }
+    assert_receive_event(Consensus.AppendEntriesResult.new(term: 2, success: true))
+  end
+
   test 'candidate receiving "request_vote" with stale term' do
     result = Consensus.candidate(Consensus.RequestVote.new(term: 1, candidate_id: self), Consensus.State.new(current_term: 2))
     assert result == { :next_state, :candidate, Consensus.State.new(current_term: 2) }

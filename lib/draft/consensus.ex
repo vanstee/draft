@@ -40,8 +40,26 @@ defmodule Draft.Consensus do
     next_state(:follower, state)
   end
 
+  # TODO: If existing entries conflict with new entries, delete all existing
+  # entries starting with first conflicting entry
+  # TODO: Apply newly committed entries to state machine
+  def follower(append_entries = AppendEntries[], state) do
+    state = state.update(current_term: Enum.max([append_entries.term, state.current_term]))
+
+    if accept_entries?(append_entries, state) do
+      state = accept_entries(append_entries, state)
+      success = true
+    else
+      success = false
+    end
+
+    append_entries_result = AppendEntriesResult.new(term: state.current_term, success: success)
+    send_event(append_entries.leader_id, append_entries_result)
+    next_state(:follower, state)
+  end
+
   def candidate(request_vote = RequestVote[], state) do
-    if higher_term?(request_vote, state) do
+    if higher_term?(request_vote.term, state.current_term) do
       follower(request_vote, state)
     else
       request_vote_result = RequestVoteResult.new(term: state.current_term, vote_granted: false)
@@ -50,8 +68,19 @@ defmodule Draft.Consensus do
     end
   end
 
+  def candidate(append_entries = AppendEntries[], state) do
+    if not stale_term?(append_entries.term, state.current_term) do
+      follower(append_entries, state)
+    else
+      append_entries_result = AppendEntriesResult.new(term: state.current_term, success: false)
+      send_event(append_entries_result.leader_id, append_entries_result)
+      next_state(:candidate, state)
+    end
+  end
+
+  # TODO: Send heartbeat at interval
   def leader(request_vote = RequestVote[], state) do
-    if higher_term?(request_vote, state) do
+    if higher_term?(request_vote.term, state.current_term) do
       follower(request_vote, state)
     else
       request_vote_result = RequestVoteResult.new(term: state.current_term, vote_granted: false)
@@ -60,21 +89,49 @@ defmodule Draft.Consensus do
     end
   end
 
+  def leader(append_entries = AppendEntries[], state) do
+    if not stale_term?(append_entries.term, state.current_term) do
+      follower(append_entries, state)
+    else
+      append_entries_result = AppendEntriesResult.new(term: state.current_term, success: false)
+      send_event(append_entries_result.leader_id, append_entries_result)
+      next_state(:leader, state)
+    end
+  end
+
   defp next_state(state_name, state) do
     { :next_state, state_name, state }
   end
 
-  defp stale_term?(request_vote, state), do: request_vote.term < state.current_term
-  defp current_term?(request_vote, state), do: request_vote.term == state.current_term
-  defp higher_term?(request_vote, state), do: request_vote.term > state.current_term
+  defp stale_term?(term, current_term), do: term < current_term
+  defp current_term?(term, current_term), do: term == current_term
+  defp higher_term?(term, current_term), do: term > current_term
 
   defp grant_vote?(request_vote, state) do
-    higher_term?(request_vote, state) or
+    higher_term?(request_vote.term, state.current_term) or
       vote_available?(request_vote, state)
   end
 
   defp vote_available?(request_vote, state) do
-    current_term?(request_vote, state) and
+    current_term?(request_vote.term, state.current_term) and
       (state.voted_for == nil or state.voted_for == request_vote.candidate_id)
+  end
+
+  defp accept_entries?(append_entries, state) do
+    not stale_term?(append_entries.term, state.current_term) and
+      contains_prev_log?(append_entries, state)
+  end
+
+  defp contains_prev_log?(append_entries, state) do
+    prev_log_index = append_entries.prev_log_index
+    prev_log_term = append_entries.prev_log_term
+    finder = match?({ ^prev_log_index, ^prev_log_term, _ }, &1)
+    Enum.any?(state.log, finder)
+  end
+
+  # TODO: Only append new entries
+  defp accept_entries(append_entries, state) do
+    log = state.log ++ append_entries.entries
+    state.update(log: log)
   end
 end
