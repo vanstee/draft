@@ -145,6 +145,42 @@ defmodule Draft.ConsensusTest do
     assert_receive_event(request_vote_result)
   end
 
+  test 'candidate receiving "append_entries" with stale term' do
+    append_entries = Consensus.AppendEntries.new(term: 1, leader_id: self)
+    initial_state = Consensus.State.new(current_term: 2)
+    transition = Consensus.candidate(append_entries, initial_state)
+
+    final_state = Consensus.State.new(current_term: 2)
+    append_entries_result = Consensus.AppendEntriesResult.new(term: 2, success: false)
+
+    assert transition == { :next_state, :candidate, final_state }
+    assert_receive_event(append_entries_result)
+  end
+
+  test 'candidate receiving "append_entries" with current term' do
+    append_entries = Consensus.AppendEntries.new(term: 1, leader_id: self)
+    initial_state = Consensus.State.new(current_term: 1)
+    transition = Consensus.candidate(append_entries, initial_state)
+
+    final_state = Consensus.State.new(current_term: 1)
+    append_entries_result = Consensus.AppendEntriesResult.new(term: 1, success: false)
+
+    assert transition == { :next_state, :follower, final_state }
+    assert_receive_event(append_entries_result)
+  end
+
+  test 'candidate receiving "append_entries" with higher term' do
+    append_entries = Consensus.AppendEntries.new(term: 2, leader_id: self)
+    initial_state = Consensus.State.new(current_term: 1)
+    transition = Consensus.candidate(append_entries, initial_state)
+
+    final_state = Consensus.State.new(current_term: 2)
+    append_entries_result = Consensus.AppendEntriesResult.new(term: 2, success: false)
+
+    assert transition == { :next_state, :follower, final_state }
+    assert_receive_event(append_entries_result)
+  end
+
   test 'leader receiving "request_vote" with stale term' do
     request_vote = Consensus.RequestVote.new(term: 1, candidate_id: self)
     initial_state = Consensus.State.new(current_term: 2)
@@ -179,5 +215,41 @@ defmodule Draft.ConsensusTest do
 
     assert transition == { :next_state, :follower, final_state }
     assert_receive_event(request_vote_result)
+  end
+
+  test 'leader receiving "append_entries" with stale term' do
+    append_entries = Consensus.AppendEntries.new(term: 1, leader_id: self)
+    initial_state = Consensus.State.new(current_term: 2)
+    transition = Consensus.leader(append_entries, initial_state)
+
+    final_state = Consensus.State.new(current_term: 2)
+    append_entries_result = Consensus.AppendEntriesResult.new(term: 2, success: false)
+
+    assert transition == { :next_state, :leader, final_state }
+    assert_receive_event(append_entries_result)
+  end
+
+  test 'leader receiving "append_entries" with current term' do
+    append_entries = Consensus.AppendEntries.new(term: 1, leader_id: self)
+    initial_state = Consensus.State.new(current_term: 1)
+    transition = Consensus.leader(append_entries, initial_state)
+
+    final_state = Consensus.State.new(current_term: 1)
+    append_entries_result = Consensus.AppendEntriesResult.new(term: 1, success: false)
+
+    assert transition == { :next_state, :follower, final_state }
+    assert_receive_event(append_entries_result)
+  end
+
+  test 'leader receiving "append_entries" with higher term' do
+    append_entries = Consensus.AppendEntries.new(term: 2, leader_id: self)
+    initial_state = Consensus.State.new(current_term: 1)
+    transition = Consensus.leader(append_entries, initial_state)
+
+    final_state = Consensus.State.new(current_term: 2)
+    append_entries_result = Consensus.AppendEntriesResult.new(term: 2, success: false)
+
+    assert transition == { :next_state, :follower, final_state }
+    assert_receive_event(append_entries_result)
   end
 end

@@ -73,7 +73,7 @@ defmodule Draft.Consensus do
       follower(append_entries, state)
     else
       append_entries_result = AppendEntriesResult.new(term: state.current_term, success: false)
-      send_event(append_entries_result.leader_id, append_entries_result)
+      send_event(append_entries.leader_id, append_entries_result)
       next_state(:candidate, state)
     end
   end
@@ -94,7 +94,7 @@ defmodule Draft.Consensus do
       follower(append_entries, state)
     else
       append_entries_result = AppendEntriesResult.new(term: state.current_term, success: false)
-      send_event(append_entries_result.leader_id, append_entries_result)
+      send_event(append_entries.leader_id, append_entries_result)
       next_state(:leader, state)
     end
   end
