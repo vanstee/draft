@@ -109,6 +109,15 @@ defmodule Draft.ConsensusTest do
     assert_receive_event(append_entries_result)
   end
 
+  test 'follower receiving "election_timeout"' do
+    initial_state = Consensus.State.new(current_term: 1)
+    transition = Consensus.follower(:election_timeout, initial_state)
+
+    final_state = Consensus.State.new(current_term: 2)
+
+    assert transition == { :next_state, :candidate, final_state }
+  end
+
   test 'candidate receiving "request_vote" with stale term' do
     request_vote = Consensus.RequestVote.new(term: 1, candidate_id: self)
     initial_state = Consensus.State.new(current_term: 2)
@@ -181,6 +190,15 @@ defmodule Draft.ConsensusTest do
     assert_receive_event(append_entries_result)
   end
 
+  test 'candidate receiving "election_timeout"' do
+    initial_state = Consensus.State.new(current_term: 1)
+    transition = Consensus.candidate(:election_timeout, initial_state)
+
+    final_state = Consensus.State.new(current_term: 2)
+
+    assert transition == { :next_state, :candidate, final_state }
+  end
+
   test 'leader receiving "request_vote" with stale term' do
     request_vote = Consensus.RequestVote.new(term: 1, candidate_id: self)
     initial_state = Consensus.State.new(current_term: 2)
@@ -251,5 +269,14 @@ defmodule Draft.ConsensusTest do
 
     assert transition == { :next_state, :follower, final_state }
     assert_receive_event(append_entries_result)
+  end
+
+  test 'leader receiving "heartbeat_timeout"' do
+    initial_state = Consensus.State.new(current_term: 1)
+    transition = Consensus.leader(:heartbeat_timeout, initial_state)
+
+    final_state = Consensus.State.new(current_term: 1)
+
+    assert transition == { :next_state, :leader, final_state }
   end
 end
