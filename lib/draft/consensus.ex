@@ -6,7 +6,7 @@ defmodule Draft.Consensus do
   @election_timeout_maximum @election_timeout_minimum * 2
   @election_timeout :crypto.rand_uniform(@election_timeout_minimum, @election_timeout_maximum)
 
-  defrecord State, current_term: 0, voted_for: nil, log: [], election_timer: nil, heartbeat_timer: nil
+  defrecord State, current_term: 0, voted_for: nil, log: [], election_timer: nil, heartbeat_timer: nil, timer_module: Draft.Timer
   defrecord RequestVote, term: nil, candidate_id: nil, last_log_index: nil, last_log_term: nil
   defrecord RequestVoteResult, term: nil, vote_granted: nil
   defrecord AppendEntries, term: nil, leader_id: nil, prev_log_index: nil, prev_log_term: nil, entries: [], commit_index: nil
@@ -21,11 +21,11 @@ defmodule Draft.Consensus do
   end
 
   def start_link(state // State.new) do
-    state.update(election_timer: start_timer(@election_timeout))
     :gen_fsm.start_link(__MODULE__, state, [])
   end
 
   def init(state) do
+    state.update(election_timer: state.timer_module.start(@election_timeout, self))
     { :ok, :follower, state }
   end
 
@@ -34,7 +34,7 @@ defmodule Draft.Consensus do
   def follower(request_vote = RequestVote[], state) do
     if grant_vote?(request_vote, state) do
       current_term = Enum.max([request_vote.term, state.current_term])
-      election_timer = reset_timer(state.election_timer, @election_timeout)
+      election_timer = state.timer_module.reset(state.election_timer, @election_timeout, self)
       state = state.update(current_term: current_term, voted_for: request_vote.candidate_id, election_timer: election_timer)
       vote_granted = true
     else
@@ -67,7 +67,7 @@ defmodule Draft.Consensus do
   # TODO: Start new election by sending out request_vote events
   def follower(:election_timeout, state) do
     state = state.update_current_term(&1 + 1)
-    state = state.update_election_timer(reset_timer(&1, @election_timeout))
+    state = state.update_election_timer(state.timer_module.reset(&1, @election_timeout, self))
     next_state(:candidate, state)
   end
 
@@ -95,7 +95,7 @@ defmodule Draft.Consensus do
   # TODO: Handle incoming request_vote_result events
   def candidate(:election_timeout, state) do
     state = state.update_current_term(&1 + 1)
-    state = state.update_election_timer(reset_timer(&1, @election_timeout))
+    state = state.update_election_timer(state.timer_module.reset(&1, @election_timeout, self))
     next_state(:candidate, state)
   end
 
@@ -159,28 +159,5 @@ defmodule Draft.Consensus do
   defp accept_entries(append_entries, state) do
     log = state.log ++ append_entries.entries
     state.update(log: log)
-  end
-
-  if Mix.env != :test do
-    defp reset_timer(timer, timeout) do
-      if timer, do: cancel_timer(timer)
-      start_timer(timeout)
-    end
-
-    defp start_timer(timeout) do
-      :gen_fsm.start_timer(timeout, :timeout)
-    end
-
-    defp cancel_timer(timer) do
-      :gen_fsm.cancel_timer(timer)
-    end
-  else
-    defp reset_timer(timer, _) do
-      timer
-    end
-
-    defp start_timer(_) do
-      nil
-    end
   end
 end
